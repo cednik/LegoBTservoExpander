@@ -47,6 +47,8 @@ private:
 
 LegoProtocol lego;
 
+#include "driver/i2c.h"
+
 void setup() {
     Serial.begin(115200);
     Serial.println("LegoBTservoExpander");
@@ -54,6 +56,17 @@ void setup() {
         Serial.println("Can not initialize bluetooth!");
         for(;;){}
     }
+
+    i2c_config_t i2c_config;
+    i2c_config.sda_io_num = GPIO_NUM_22;
+    i2c_config.scl_io_num = GPIO_NUM_23;
+    i2c_config.sda_pullup_en = GPIO_PULLUP_ENABLE;
+    i2c_config.scl_pullup_en = GPIO_PULLUP_ENABLE;
+    i2c_config.mode = I2C_MODE_SLAVE;
+    i2c_config.slave.addr_10bit_en = I2C_ADDR_BIT_7;
+    i2c_config.slave.slave_addr = 4;
+     ESP_ERROR_CHECK(i2c_param_config(I2C_NUM_0, &i2c_config));
+     ESP_ERROR_CHECK(i2c_driver_install(I2C_NUM_0, i2c_config.mode, 1024, 1024, 0));
 }
 
 bool is_connected = false;
@@ -88,5 +101,14 @@ void loop() {
         print_val(Serial, "\tdata len", lego.payload_length());
         hexDump("\tdata:", lego.payload(), lego.payload_length());
         lego.clear();
+    }
+    uint8_t buffer[16];
+    int size = i2c_slave_read_buffer(I2C_NUM_0, buffer, 16, 5000 / portTICK_RATE_MS);
+    if (size == ESP_FAIL) {
+        Serial.println("I2C read failed");
+    } else if (size == 0) {
+        Serial.println("I2C: notihing to read");
+    } else {
+        hexDump("I2C read:", buffer, size);
     }
 }
