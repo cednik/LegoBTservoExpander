@@ -80,6 +80,9 @@ void print_val(Stream& stream, std::string intro, const Value& value) {
 
 #include "hexdump.h"
 
+char c = 'a';
+uint8_t cnt = 0;
+
 void loop() {
     bool con = bt.hasClient();
     if (con != is_connected) {
@@ -102,13 +105,46 @@ void loop() {
         hexDump("\tdata:", lego.payload(), lego.payload_length());
         lego.clear();
     }
+    if (Serial.available()) {
+        char ch = Serial.read();
+        switch (ch) {
+            case '\n':
+                break;
+            case '\r':
+                Serial.write('\n');
+                break;
+            default:
+                c = ch;
+                Serial.print("c set to ");
+                Serial.println(c);
+                break;
+        }
+    }
     uint8_t buffer[16];
-    int size = i2c_slave_read_buffer(I2C_NUM_0, buffer, 16, 5000 / portTICK_RATE_MS);
+    int size = i2c_slave_read_buffer(I2C_NUM_0, buffer, 1, 1 / portTICK_RATE_MS);
     if (size == ESP_FAIL) {
         Serial.println("I2C read failed");
     } else if (size == 0) {
-        Serial.println("I2C: notihing to read");
+        //Serial.println("I2C: notihing to read");
     } else {
+        i2c_slave_write_buffer(I2C_NUM_0, &cnt, 1, 1000 / portTICK_RATE_MS);
+        ++cnt;
         hexDump("I2C read:", buffer, size);
+        if (buffer[0] == 3 || buffer[0] == 4) {
+            int stop = buffer[0] == 3 ? 1 : 8;
+            for(int i = 0; i != stop; ++i)
+                buffer[i] = c+i;
+            size = i2c_slave_write_buffer(I2C_NUM_0, buffer, stop, 1000 / portTICK_RATE_MS);
+            if (size == ESP_FAIL) {
+                Serial.println("I2C write failed");
+            } else if (size == 0) {
+                Serial.println("I2C: write buffer full");
+            } else {
+                Serial.print("I2C: written ");
+                Serial.print(size);
+                Serial.println(" bytes");
+                hexDump("I2C write:", buffer, size);
+            }
+        }
     }
 }
